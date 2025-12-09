@@ -114,15 +114,15 @@ sudo yum install libxcrypt-compat -y
       content 'Hello, Chef!'
     end
     ```
-    or try docker
+    // or try docker
+
    ```
    package 'docker' do
-  action :install
-end
-
-service 'docker' do
-  action [:enable, :start]
-end
+   action :install
+   end
+   service 'docker' do
+   action [:enable, :start]
+   end
    ```
 
 ### Step 5: Run Chef Client in Local Mode
