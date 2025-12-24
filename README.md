@@ -5,6 +5,7 @@ A comprehensive guide and practice repository for setting up and using Chef on A
 ## Table of Contents
 
 - [Overview](#overview)
+- [Chef Architecture](#chef-architecture)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Getting Started](#getting-started)
@@ -22,6 +23,281 @@ This repository contains instructions and examples for:
 - Creating and managing Chef cookbooks
 - Automating server configuration and package management
 - Best practices for infrastructure as code with Chef
+
+## Chef Architecture
+
+Understanding Chef's architecture is crucial for effective configuration management. This section provides visual representations of Chef's components and workflows.
+
+### 1. Chef Ecosystem Overview
+
+```mermaid
+graph TB
+    subgraph "Chef Workstation"
+        CW[Chef Workstation]
+        CB[Cookbooks]
+        R[Recipes]
+        K[Knife CLI]
+        TEST[Test Kitchen]
+    end
+    
+    subgraph "Chef Server"
+        CS[Chef Server]
+        POL[Policies]
+        ENV[Environments]
+        RB[Run Lists]
+        NDB[Node Database]
+    end
+    
+    subgraph "Managed Nodes"
+        N1[Node 1<br/>EC2 Instance]
+        N2[Node 2<br/>EC2 Instance]
+        N3[Node N<br/>EC2 Instance]
+        CC[Chef Client]
+    end
+    
+    CW -->|Upload Cookbooks| CS
+    K -->|Manage Infrastructure| CS
+    CS -->|Download Cookbooks| CC
+    CC -->|Report Status| CS
+    CC --> N1
+    CC --> N2
+    CC --> N3
+```
+
+### 2. Chef Client Run Process
+
+```mermaid
+sequenceDiagram
+    participant CC as Chef Client
+    participant CS as Chef Server
+    participant N as Node (EC2)
+    
+    CC->>CS: 1. Authenticate
+    CC->>CS: 2. Get Node Object
+    CC->>CS: 3. Download Cookbooks
+    CC->>N: 4. Build Resource Collection
+    CC->>N: 5. Configure Node
+    CC->>CS: 6. Update Node Object
+    CC->>CS: 7. Send Run Report
+    
+    Note over CC,N: Chef Run Complete
+```
+
+### 3. Local Mode Architecture (Used in this Guide)
+
+```
+┌─────────────────────────────────────────────────┐
+│              EC2 Instance                       │
+│                                                 │
+│  ┌─────────────────┐    ┌─────────────────────┐ │
+│  │ Chef Workstation│    │   Local Repository  │ │
+│  │                 │    │                     │ │
+│  │ • chef-client   │◄──►│ • cookbooks/        │ │
+│  │ • knife         │    │ • recipes/          │ │
+│  │ • cookstyle     │    │ • attributes/       │ │
+│  │ • test kitchen  │    │ • templates/        │ │
+│  └─────────────────┘    └─────────────────────┘ │
+│           │                                     │
+│           ▼                                     │
+│  ┌─────────────────────────────────────────────┐ │
+│  │        System Resources                     │ │
+│  │                                             │ │
+│  │ • Packages  • Services  • Files            │ │
+│  │ • Users     • Directories                  │ │
+│  └─────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
+```
+
+### 4. Cookbook Structure Diagram
+
+```
+my_cookbook/
+│
+├── README.md ──────────────── Documentation
+├── metadata.rb ───────────── Cookbook metadata & dependencies
+│
+├── recipes/ ──────────────── Contains Ruby DSL recipes
+│   ├── default.rb ────────── Main recipe (entry point)
+│   ├── install.rb ───────── Package installation logic
+│   └── configure.rb ─────── Configuration management
+│
+├── attributes/ ──────────── Variable definitions
+│   └── default.rb ──────── Default attribute values
+│
+├── templates/ ───────────── ERB templates for dynamic content
+│   └── config.erb ─────── Configuration file template
+│
+├── files/ ───────────────── Static files to be transferred
+│   └── app.conf ──────── Static configuration file
+│
+├── libraries/ ───────────── Custom Ruby classes & modules
+│   └── helpers.rb ────── Helper functions
+│
+└── spec/ ────────────────── Unit tests
+    └── unit/
+        └── recipes/
+            └── default_spec.rb
+```
+
+### 5. Chef Resource Management Flow
+
+```mermaid
+graph TD
+    A[Chef Recipe] --> B{Resource Declaration}
+    B --> C[Package Resource]
+    B --> D[Service Resource]
+    B --> E[File Resource]
+    B --> F[Template Resource]
+    
+    C --> G[Install Packages]
+    D --> H[Manage Services]
+    E --> I[Create/Modify Files]
+    F --> J[Generate Dynamic Content]
+    
+    G --> K[System State]
+    H --> K
+    I --> K
+    J --> K
+    
+    K --> L[Idempotent Result]
+```
+
+### 6. Chef Run States and Actions
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Chef Client Execution                    │
+├─────────────────────────────────────────────────────────────┤
+│  Phase 1: Setup                                            │
+│  ├─ Load Configuration                                      │
+│  ├─ Authenticate (if using Chef Server)                    │
+│  └─ Load Node Object                                        │
+├─────────────────────────────────────────────────────────────┤
+│  Phase 2: Build Resource Collection                        │
+│  ├─ Download & Load Cookbooks                              │
+│  ├─ Load Attributes                                         │
+│  ├─ Execute Recipes                                         │
+│  └─ Build Resource List                                     │
+├─────────────────────────────────────────────────────────────┤
+│  Phase 3: Configure Node                                   │
+│  ├─ Execute Resources in Order                             │
+│  ├─ Handle Dependencies                                     │
+│  ├─ Apply Changes (if needed)                              │
+│  └─ Generate Reports                                        │
+├─────────────────────────────────────────────────────────────┤
+│  Phase 4: Cleanup                                          │
+│  ├─ Update Node Object                                      │
+│  ├─ Send Reports (if using Chef Server)                    │
+│  └─ Exit with Status Code                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7. Resource Dependencies and Ordering
+
+```mermaid
+graph LR
+    A[Install Package] --> B[Configure Service]
+    B --> C[Start Service]
+    C --> D[Create Log Directory]
+    D --> E[Set Permissions]
+    
+    F[Download Config] --> B
+    G[Create User] --> B
+    G --> D
+    
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#e8f5e8
+    style D fill:#fce4ec
+    style E fill:#f3e5f5
+```
+
+### 8. Convergence and Idempotency
+
+```
+Initial State          Desired State         Converged State
+┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+│ Apache: ❌   │  ──►  │ Apache: ✅   │  ──►  │ Apache: ✅   │
+│ Config: ❌   │       │ Config: ✅   │       │ Config: ✅   │
+│ Service: ❌  │       │ Service: ✅  │       │ Service: ✅  │
+└─────────────┘       └─────────────┘       └─────────────┘
+      Run 1                                      Run 2+
+    (Changes Made)                           (No Changes - 
+                                            Already Converged)
+```
+
+### 9. Multi-Environment Deployment Architecture
+
+```mermaid
+graph TB
+    subgraph "Development"
+        DEV_WS[Workstation]
+        DEV_NODE[Dev EC2]
+    end
+    
+    subgraph "Staging"
+        STAGE_NODE[Staging EC2]
+    end
+    
+    subgraph "Production"
+        PROD_NODE1[Prod EC2-1]
+        PROD_NODE2[Prod EC2-2]
+        PROD_NODE3[Prod EC2-N]
+    end
+    
+    subgraph "Version Control"
+        GIT[Git Repository]
+        CB_V1[Cookbook v1.0]
+        CB_V2[Cookbook v2.0]
+    end
+    
+    DEV_WS -->|Test & Develop| DEV_NODE
+    DEV_WS -->|Commit| GIT
+    GIT -->|Deploy v1.0| STAGE_NODE
+    GIT -->|Deploy v1.0| PROD_NODE1
+    GIT -->|Deploy v1.0| PROD_NODE2
+    GIT -->|Deploy v1.0| PROD_NODE3
+```
+
+### 10. AWS EC2 + Chef Integration
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        AWS Cloud                            │
+│                                                             │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │   EC2 Instance  │    │        AWS Services             │ │
+│  │                 │    │                                 │ │
+│  │  ┌─────────────┐│    │ • CloudWatch (Monitoring)       │ │
+│  │  │Chef Client  ││◄──►│ • S3 (Artifact Storage)         │ │
+│  │  │             ││    │ • IAM (Authentication)          │ │
+│  │  │• Cookbooks  ││    │ • Systems Manager               │ │
+│  │  │• Recipes    ││    │ • Secrets Manager               │ │
+│  │  │• Attributes ││    │                                 │ │
+│  │  └─────────────┘│    └─────────────────────────────────┘ │
+│  └─────────────────┘                                        │
+│           │                                                 │
+│           ▼                                                 │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │              Configured Services                        │ │
+│  │                                                         │ │
+│  │ Web Server │ Database │ Monitoring │ Security │ Backup  │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+These diagrams illustrate:
+
+1. **Overall Architecture**: How Chef components interact
+2. **Execution Flow**: Step-by-step process of a Chef run
+3. **Local Mode**: Simplified architecture for single-node management
+4. **Cookbook Structure**: Organization of Chef code
+5. **Resource Management**: How Chef manages system resources
+6. **Execution Phases**: Detailed Chef client run process
+7. **Dependencies**: How resources depend on each other
+8. **Convergence**: Chef's idempotent behavior
+9. **Multi-Environment**: Scaling across different environments
+10. **AWS Integration**: Chef working with AWS services
 
 ## Prerequisites
 
